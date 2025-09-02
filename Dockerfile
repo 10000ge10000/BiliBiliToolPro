@@ -6,6 +6,12 @@ EXPOSE 8080
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /code
 
+# Set environment variables for better build experience
+ENV DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=true
+ENV NUGET_XMLDOC_MODE=skip
+
+# Copy package management files first for better caching
 COPY ["Directory.Packages.props", "./"]
 COPY ["src/Ray.BiliBiliTool.Web/Ray.BiliBiliTool.Web.csproj", "src/Ray.BiliBiliTool.Web/"]
 COPY ["src/Ray.BiliBiliTool.Web.Client/Ray.BiliBiliTool.Web.Client.csproj", "src/Ray.BiliBiliTool.Web.Client/"]
@@ -21,13 +27,25 @@ COPY ["src/BlazingQuartz.Core/BlazingQuartz.Core.csproj", "src/BlazingQuartz.Cor
 COPY ["src/BlazingQuartz.Jobs/BlazingQuartz.Jobs.csproj", "src/BlazingQuartz.Jobs/"]
 COPY ["src/BlazingQuartz.Jobs.Abstractions/BlazingQuartz.Jobs.Abstractions.csproj", "src/BlazingQuartz.Jobs.Abstractions/"]
 
-RUN dotnet restore "src/Ray.BiliBiliTool.Web/Ray.BiliBiliTool.Web.csproj"
+# Restore packages with retry logic using shell script
+RUN i=1; while [ $i -le 5 ]; do \
+    echo "Restore attempt $i..."; \
+    dotnet restore "src/Ray.BiliBiliTool.Web/Ray.BiliBiliTool.Web.csproj" \
+        --disable-parallel \
+        --verbosity minimal \
+        --force \
+        --no-cache && break || \
+    (echo "Restore attempt $i failed, waiting..." && sleep $((i * 5))); \
+    i=$((i + 1)); \
+    done && \
+    echo "Package restore completed"
+
 COPY . .
 WORKDIR "/code/src/Ray.BiliBiliTool.Web"
 RUN dotnet build "Ray.BiliBiliTool.Web.csproj" -c Release -o /app/build
 
 FROM build AS publish
-RUN dotnet publish "Ray.BiliBiliTool.Web.csproj" -c Release -o /app/publish
+RUN dotnet publish "Ray.BiliBiliTool.Web.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 FROM base AS final
 WORKDIR /app

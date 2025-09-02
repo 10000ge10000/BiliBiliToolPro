@@ -156,11 +156,68 @@ docker run --rm \
 
 如果有需要（大部分都不需要），可以使用源码自己构建镜像，如下：
 
-在有项目的Dockerfile的目录运行
+### 7.1. 推荐方式：使用构建脚本
 
-`docker build -t TARGET_NAME .`
+我们提供了功能强大的构建脚本，支持多种构建选项：
+
+```bash
+# 基础构建
+./docker/build.sh
+
+# 自定义镜像名称和标签
+./docker/build.sh -n my-bili-tool -t v1.0.0
+
+# 多架构构建（支持 AMD64 和 ARM64）
+./docker/build.sh --multi-arch
+
+# 构建并推送到镜像仓库
+./docker/build.sh -r ghcr.io/yourusername --push
+
+# 查看所有选项
+./docker/build.sh --help
+```
+
+### 7.2. 传统方式：手动构建
+
+在有项目的Dockerfile的目录运行：
+
+```bash
+docker build -t TARGET_NAME .
+```
 
 `TARGET_NAME`为镜像名称和版本，可以自己起个名字
+
+### 7.3. 多架构构建
+
+使用 buildx 进行多架构构建：
+
+```bash
+# AMD64 架构
+docker buildx build --platform linux/amd64 -t TARGET_NAME .
+
+# ARM64 架构（适用于 Apple Silicon Mac、ARM 服务器）
+docker buildx build --platform linux/arm64 -t TARGET_NAME .
+
+# 多架构同时构建
+docker buildx build --platform linux/amd64,linux/arm64 -t TARGET_NAME .
+```
+
+### 7.4. 故障排除
+
+如果构建过程中遇到网络问题（如 NuGet 连接失败），请：
+
+1. 检查网络连接到 `api.nuget.org`
+2. 使用重试机制：`./docker/build.sh --retry 5`
+3. 如果在企业网络环境中，可能需要配置代理设置
+4. 参考详细的构建指南：[docker/BUILD.md](docker/BUILD.md)
+
+### 7.5. 构建环境测试
+
+运行以下命令测试构建环境是否正常：
+
+```bash
+./docker/test-build-env.sh
+```
 
 ## 8. 其他
 
