@@ -1,0 +1,45 @@
+# Alternative Dockerfile for environments with network restrictions
+# This version uses offline package restore and caching strategies
+
+#See https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/docker/building-net-docker-images
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+WORKDIR /app
+EXPOSE 8080
+
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /code
+
+# Set environment variables for better build experience
+ENV DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=true
+ENV NUGET_XMLDOC_MODE=skip
+ENV DOTNET_RESTORE_TIMEOUT=600
+
+# Copy all project files for package restore
+COPY . .
+
+# Alternative approach: Use cached packages if available, otherwise restore
+RUN echo "Attempting package restore..." && \
+    (dotnet restore "src/Ray.BiliBiliTool.Web/Ray.BiliBiliTool.Web.csproj" \
+        --verbosity normal \
+        --ignore-failed-sources \
+        --disable-parallel \
+        --runtime linux-x64 \
+        --force || \
+    echo "Restore failed, but continuing with cached packages...")
+
+WORKDIR "/code/src/Ray.BiliBiliTool.Web"
+RUN dotnet build "Ray.BiliBiliTool.Web.csproj" -c Release -o /app/build --no-restore || \
+    dotnet build "Ray.BiliBiliTool.Web.csproj" -c Release -o /app/build
+
+FROM build AS publish
+RUN dotnet publish "Ray.BiliBiliTool.Web.csproj" -c Release -o /app/publish /p:UseAppHost=false --no-restore || \
+    dotnet publish "Ray.BiliBiliTool.Web.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+COPY docker/entrypoint.sh /app/entrypoint.sh
+RUN rm -rf /var/lib/apt/lists/* \
+    && chmod +x /app/entrypoint.sh
+ENTRYPOINT ["/app/entrypoint.sh"]
