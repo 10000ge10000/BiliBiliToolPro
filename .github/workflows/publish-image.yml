@@ -3,8 +3,10 @@ name: Publish My Docker Image
 on:
   workflow_dispatch:  # 允许手动触发
   push:
+    branches:
+      - main  # 添加分支触发条件
     tags:
-      - '*'  # 当推送标签时触发
+      - 'v*'  # 只有 v 开头的标签才会触发，如 v1.0.0
 
 env:
   GHCR_USERNAME: ${{ github.repository_owner }}
@@ -25,7 +27,7 @@ jobs:
       - name: Get Version
         id: getVersion
         run: |
-          VERSION=$(grep -oP '(?<=<Version>).*?(?=<\/Version>)' ./common.props)
+          VERSION=$(grep -oP '(?<=<Version>).*?(?=<\/Version>)' ./common.props || echo "1.0.0")
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Set up QEMU
